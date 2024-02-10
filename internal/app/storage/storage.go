@@ -2,6 +2,7 @@ package storage
 
 import (
 	"crypto/rand"
+	"time"
 
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
@@ -27,6 +28,7 @@ func (d *Storage) New(dbURI string) error {
 func (d *Storage) createSchema() error {
 	models := []interface{}{
 		(*User)(nil),
+		(*Order)(nil),
 	}
 
 	for _, model := range models {
@@ -56,16 +58,18 @@ func (d *Storage) AddUser(user *User) (int64, error) {
 	}
 	user.Salt = salt
 	user.HashedPassword = hashedPassword
-	_, err = d.db.Model(user).Returning("*").Insert()
+	_, err = d.db.Model(user).Insert()
 	if pgErr, ok := err.(pg.Error); ok {
 		if pgErr.IntegrityViolation() {
 			return -1, errs.ErrConflict
+		} else {
+			return -1, err
 		}
 	}
 	return user.ID, nil
 }
 
-func (d *Storage) Authenticate(user *User) (int64, error) {
+func (d *Storage) CheckLoginPassword(user *User) (int64, error) {
 	err := d.db.Model(user).Where("name = ?", user.Name).Select()
 	if err != nil {
 		if err.Error() == pg.ErrNoRows.Error() {
@@ -85,6 +89,24 @@ func (d *Storage) GetUserByName(name string) (user *User, err error) {
 	user = &User{}
 	err = d.db.Model(user).Where("name = ?", name).Select()
 	return
+}
+
+func (d *Storage) SetOrder(number int, userID int64) (*Order, error) {
+	order := &Order{
+		Number:     number,
+		UserID:     userID,
+		UploadedAt: time.Now(),
+	}
+	_, err := d.db.Model(order).Insert()
+	if pgErr, ok := err.(pg.Error); ok {
+		if pgErr.IntegrityViolation() {
+			_ = d.db.Model(order).Where("number = ?", number).Select()
+			return order, errs.ErrConflict
+		} else {
+			return nil, err
+		}
+	}
+	return order, err
 }
 
 func generateSalt() ([]byte, error) {
