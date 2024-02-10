@@ -1,7 +1,9 @@
 package storage
 
 type User struct {
-	Id       int64
-	Name     string `pg:",notnull,unique"`
-	Password string `pg:",notnull"`
+	ID             int64
+	Name           string `pg:",notnull,unique" json:"login"`
+	Password       string `pg:"-" json:"password"`
+	HashedPassword []byte `json:"-"`
+	Salt           []byte `json:"-"`
 }
