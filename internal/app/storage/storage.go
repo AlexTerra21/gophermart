@@ -131,6 +131,19 @@ func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]Order, error) 
 	return orders, nil
 }
 
+func (d *Storage) UpdateAccrual(ctx context.Context, order *Order) error {
+	tx, err := d.db.BeginContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Close()
+	_, err = tx.ModelContext(ctx, order).Column("status", "accrual").Where("number = ?", order.Number).Update()
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func generateSalt() ([]byte, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {

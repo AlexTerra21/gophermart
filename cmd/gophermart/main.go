@@ -35,6 +35,8 @@ func run() (err error) {
 	}
 	defer config.Storage.Close()
 
+	config.InitAsync()
+
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 

@@ -1,7 +1,6 @@
 package accrual
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-resty/resty/v2"
@@ -10,14 +9,14 @@ import (
 	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
-func GetAccrual(order int64, endpoint string) (*storage.Accrual, error) {
+func GetAccrual(order string, endpoint string) (*storage.Accrual, error) {
 	accrual := &storage.Accrual{}
 	client := resty.New()
 
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/text").
 		SetResult(accrual).
-		Get(endpoint + "/api/orders/" + fmt.Sprintf("%d", order))
+		Get(endpoint + "/api/orders/" + order)
 	if err != nil {
 		return nil, err
 	}

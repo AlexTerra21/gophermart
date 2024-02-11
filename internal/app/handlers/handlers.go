@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
 
-	"github.com/AlexTerra21/gophermart/internal/app/accrual"
 	"github.com/AlexTerra21/gophermart/internal/app/auth"
 	"github.com/AlexTerra21/gophermart/internal/app/compress"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
@@ -128,10 +126,6 @@ func addOrder(c *config.Config) http.HandlerFunc {
 			return
 		}
 
-		accrual, err := accrual.GetAccrual(number, c.GetAccrualAddress())
-		fmt.Println(accrual)
-		fmt.Println(err)
-
 		order, err := c.Storage.SetOrder(r.Context(), number, userID)
 		if err != nil {
 			logger.Log().Debug("Error adding new order", zap.Error(err))
@@ -148,6 +142,7 @@ func addOrder(c *config.Config) http.HandlerFunc {
 				return
 			}
 		}
+		c.OrderQueue.Push(order)
 		w.WriteHeader(http.StatusAccepted) // 202
 	}
 }

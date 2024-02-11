@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/AlexTerra21/gophermart/internal/app/async"
 	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
@@ -14,6 +15,7 @@ type Config struct {
 	dbConnectString string
 	accrualAddress  string
 	Storage         *storage.Storage
+	OrderQueue      *async.Async
 }
 
 func NewConfig() *Config {
@@ -27,6 +29,10 @@ func (c *Config) InitStorage() (err error) {
 	// logger.Log().Info(c.dbConnectString)
 	err = c.Storage.New(c.dbConnectString)
 	return
+}
+
+func (c *Config) InitAsync() {
+	c.OrderQueue = async.NewAsync(c.Storage, c.accrualAddress)
 }
 
 func (c *Config) GetServerAddress() string {
