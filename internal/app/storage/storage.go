@@ -138,3 +138,9 @@ func generateSalt() ([]byte, error) {
 	}
 	return salt, nil
 }
+
+// Для тестирования
+func (d *Storage) TestDataSetOrder() {
+	order := new(Order)
+	d.db.Model(order).Delete()
+}

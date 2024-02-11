@@ -49,6 +49,20 @@ func (c *Config) Print() {
 
 }
 
+// Для тестов
+func (c *Config) SetServerAddress(addr string) {
+	c.serverAddress = addr
+}
+func (c *Config) SetAccrualAddress(addr string) {
+	c.accrualAddress = addr
+}
+func (c *Config) SetDBConnectionString(dbString string) {
+	c.dbConnectString = dbString
+}
+func (c *Config) SetLogLevel(level string) {
+	c.logLevel = level
+}
+
 func (c *Config) ParseFlags() {
 	serverAddress := flag.String("a", ":8080", "address and port to run server")
 	logLevel := flag.String("l", "info", "log level")
