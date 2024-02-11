@@ -10,7 +10,7 @@ import (
 	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
-func GetAccrual(order int, endpoint string) (*storage.Accrual, error) {
+func GetAccrual(order int64, endpoint string) (*storage.Accrual, error) {
 	accrual := &storage.Accrual{}
 	client := resty.New()
 

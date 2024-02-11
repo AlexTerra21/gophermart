@@ -118,7 +118,7 @@ func addOrder(c *config.Config) http.HandlerFunc {
 			return
 		}
 		strNumber, _ := io.ReadAll(r.Body)
-		number, err := strconv.Atoi(string(strNumber))
+		number, err := strconv.ParseInt(string(strNumber), 10, 64)
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest) // 400
 			return

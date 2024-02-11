@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"time"
 
 	"github.com/go-pg/pg/v10"
@@ -95,9 +96,9 @@ func (d *Storage) CheckLoginPassword(ctx context.Context, user *User) (int64, er
 // 	return
 // }
 
-func (d *Storage) SetOrder(ctx context.Context, number int, userID int64) (*Order, error) {
+func (d *Storage) SetOrder(ctx context.Context, number int64, userID int64) (*Order, error) {
 	order := &Order{
-		Number:     number,
+		Number:     fmt.Sprintf("%d", number),
 		UserID:     userID,
 		Status:     NEW,
 		Accrual:    0,
@@ -112,7 +113,7 @@ func (d *Storage) SetOrder(ctx context.Context, number int, userID int64) (*Orde
 	_, err = tx.ModelContext(ctx, order).Insert()
 	if pgErr, ok := err.(pg.Error); ok {
 		if pgErr.IntegrityViolation() {
-			_ = d.db.ModelContext(ctx, order).Where("number = ?", number).Select()
+			_ = d.db.ModelContext(ctx, order).Where("number = ?", fmt.Sprintf("%d", number)).Select()
 			return order, errs.ErrConflict
 		} else {
 			return nil, err

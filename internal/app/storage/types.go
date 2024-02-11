@@ -22,17 +22,17 @@ type User struct {
 
 type Order struct {
 	ID         int64     `json:"-"`
-	Number     int       `pg:",notnull,unique" json:"number"`
+	Number     string    `pg:",notnull,unique" json:"number"`
 	Status     Status    `pg:",notnull" json:"status"`
-	Accrual    int64     `json:"accrual"`
+	Accrual    float32   `json:"accrual"`
 	UploadedAt time.Time `json:"uploaded_at"`
 	UserID     int64     `json:"-"`
 	// User       *User     `json:"-" pg:"rel:has-one"`
 }
 
 type Accrual struct {
-	Number  int    `json:"-"`
-	Order   string `json:"order"`
-	Status  Status `json:"status"`
-	Accrual int64  `json:"accrual"`
+	Number  int64   `json:"-"`
+	Order   string  `json:"order"`
+	Status  Status  `json:"status"`
+	Accrual float32 `json:"accrual"`
 }
