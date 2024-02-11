@@ -5,6 +5,7 @@ go 1.21.5
 require (
 	github.com/go-chi/chi v1.5.5
 	github.com/go-pg/pg/v10 v10.12.0
+	github.com/go-resty/resty/v2 v2.11.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.17.0
@@ -19,6 +20,7 @@ require (
 	github.com/vmihailenco/tagparser v0.1.2 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	mellium.im/sasl v0.3.1 // indirect
 )

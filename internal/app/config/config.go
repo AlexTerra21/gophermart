@@ -33,6 +33,10 @@ func (c *Config) GetServerAddress() string {
 	return c.serverAddress
 }
 
+func (c *Config) GetAccrualAddress() string {
+	return c.accrualAddress
+}
+
 func (c *Config) GetLogLevel() string {
 	return c.logLevel
 }

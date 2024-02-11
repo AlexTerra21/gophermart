@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/rand"
 	"time"
 
@@ -46,7 +47,7 @@ func (d *Storage) Close() {
 	d.db.Close()
 }
 
-func (d *Storage) AddUser(user *User) (int64, error) {
+func (d *Storage) AddUser(ctx context.Context, user *User) (int64, error) {
 	salt, err := generateSalt()
 	if err != nil {
 		return -1, err
@@ -58,7 +59,7 @@ func (d *Storage) AddUser(user *User) (int64, error) {
 	}
 	user.Salt = salt
 	user.HashedPassword = hashedPassword
-	_, err = d.db.Model(user).Insert()
+	_, err = d.db.ModelContext(ctx, user).Insert()
 	if pgErr, ok := err.(pg.Error); ok {
 		if pgErr.IntegrityViolation() {
 			return -1, errs.ErrConflict
@@ -69,8 +70,10 @@ func (d *Storage) AddUser(user *User) (int64, error) {
 	return user.ID, nil
 }
 
-func (d *Storage) CheckLoginPassword(user *User) (int64, error) {
-	err := d.db.Model(user).Where("name = ?", user.Name).Select()
+// Проверка на совпадение логина и пароля. Возвращает userID в случае совпадения и -1 в противном случае.
+func (d *Storage) CheckLoginPassword(ctx context.Context, user *User) (int64, error) {
+	// Проверка, что логин присутствует в базе ...
+	err := d.db.ModelContext(ctx, user).Where("name = ?", user.Name).Select()
 	if err != nil {
 		if err.Error() == pg.ErrNoRows.Error() {
 			return -1, nil
@@ -78,6 +81,7 @@ func (d *Storage) CheckLoginPassword(user *User) (int64, error) {
 			return 0, err
 		}
 	}
+	// ... логин есть. Теперь проверим совпадение паролей.
 	salted := append([]byte(user.Password), user.Salt...)
 	if err := bcrypt.CompareHashAndPassword(user.HashedPassword, salted); err != nil {
 		return -1, nil
@@ -85,28 +89,45 @@ func (d *Storage) CheckLoginPassword(user *User) (int64, error) {
 	return user.ID, nil
 }
 
-func (d *Storage) GetUserByName(name string) (user *User, err error) {
-	user = &User{}
-	err = d.db.Model(user).Where("name = ?", name).Select()
-	return
-}
+// func (d *Storage) GetUserByName(ctx context.Context, name string) (user *User, err error) {
+// 	user = &User{}
+// 	err = d.db.ModelContext(ctx, user).Where("name = ?", name).Select()
+// 	return
+// }
 
-func (d *Storage) SetOrder(number int, userID int64) (*Order, error) {
+func (d *Storage) SetOrder(ctx context.Context, number int, userID int64) (*Order, error) {
 	order := &Order{
 		Number:     number,
 		UserID:     userID,
+		Status:     NEW,
+		Accrual:    0,
 		UploadedAt: time.Now(),
 	}
-	_, err := d.db.Model(order).Insert()
+	tx, err := d.db.BeginContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Close()
+
+	_, err = tx.ModelContext(ctx, order).Insert()
 	if pgErr, ok := err.(pg.Error); ok {
 		if pgErr.IntegrityViolation() {
-			_ = d.db.Model(order).Where("number = ?", number).Select()
+			_ = d.db.ModelContext(ctx, order).Where("number = ?", number).Select()
 			return order, errs.ErrConflict
 		} else {
 			return nil, err
 		}
 	}
-	return order, err
+	return order, tx.Commit()
+}
+
+func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]Order, error) {
+	orders := make([]Order, 0)
+	err := d.db.ModelContext(ctx, &orders).Where("user_id = ?", userID).Select()
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
 }
 
 func generateSalt() ([]byte, error) {

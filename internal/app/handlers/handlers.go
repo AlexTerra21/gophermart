@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -10,7 +11,9 @@ import (
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
 
+	"github.com/AlexTerra21/gophermart/internal/app/accrual"
 	"github.com/AlexTerra21/gophermart/internal/app/auth"
+	"github.com/AlexTerra21/gophermart/internal/app/compress"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
 	"github.com/AlexTerra21/gophermart/internal/app/errs"
 	"github.com/AlexTerra21/gophermart/internal/app/logger"
@@ -23,8 +26,8 @@ func MainRouter(c *config.Config) chi.Router {
 	r.Post("/api/user/register", logger.WithLogging(register(c)))
 	r.Post("/api/user/login", logger.WithLogging(login(c)))
 	r.Post("/api/user/orders", logger.WithLogging(addOrder(c)))
-	r.Get("/api/user/orders", logger.WithLogging(empty(c)))
-	r.Get("/api/user/balance", logger.WithLogging(empty(c)))
+	r.Get("/api/user/orders", logger.WithLogging(getOrders(c)))
+	r.Get("/api/user/orders", compress.WithCompress(logger.WithLogging(getOrders(c))))
 	r.Post("/api/user/balance/withdraw", logger.WithLogging(empty(c)))
 	r.Get("/api/user/withdrawals", logger.WithLogging(empty(c)))
 	r.MethodNotAllowed(notAllowedHandler)
@@ -49,7 +52,7 @@ func register(c *config.Config) http.HandlerFunc {
 			http.Error(w, "", http.StatusInternalServerError) // 500
 			return
 		}
-		userID, err := c.Storage.AddUser(&user)
+		userID, err := c.Storage.AddUser(r.Context(), &user)
 		if err != nil {
 			logger.Log().Debug("Error adding new user", zap.Error(err))
 			if errors.Is(err, errs.ErrConflict) {
@@ -82,7 +85,7 @@ func login(c *config.Config) http.HandlerFunc {
 			http.Error(w, "Bad request", http.StatusBadRequest) // 400
 			return
 		}
-		userID, err := c.Storage.CheckLoginPassword(&user)
+		userID, err := c.Storage.CheckLoginPassword(r.Context(), &user)
 		if err != nil {
 			logger.Log().Debug("Database error", zap.Error(err))
 			http.Error(w, "Database error", http.StatusInternalServerError) // 500
@@ -124,7 +127,12 @@ func addOrder(c *config.Config) http.HandlerFunc {
 			http.Error(w, "Invalid number", http.StatusUnprocessableEntity) // 422
 			return
 		}
-		order, err := c.Storage.SetOrder(number, userID)
+
+		accrual, err := accrual.GetAccrual(number, c.GetAccrualAddress())
+		fmt.Println(accrual)
+		fmt.Println(err)
+
+		order, err := c.Storage.SetOrder(r.Context(), number, userID)
 		if err != nil {
 			logger.Log().Debug("Error adding new order", zap.Error(err))
 			if errors.Is(err, errs.ErrConflict) {
@@ -141,5 +149,33 @@ func addOrder(c *config.Config) http.HandlerFunc {
 			}
 		}
 		w.WriteHeader(http.StatusAccepted) // 202
+	}
+}
+
+func getOrders(c *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := auth.CheckAuth(r)
+		if userID < 0 {
+			w.WriteHeader(http.StatusUnauthorized) // 401
+			return
+		}
+		orders, err := c.Storage.GetOrders(r.Context(), userID)
+		if err != nil {
+			logger.Log().Debug("Error geting orders", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+		if len(orders) == 0 {
+			w.WriteHeader(http.StatusNoContent) // 204
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		encoder := json.NewEncoder(w)
+		if err := encoder.Encode(orders); err != nil {
+			logger.Log().Debug("error encoding response", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
 	}
 }

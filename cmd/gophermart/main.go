@@ -16,7 +16,7 @@ import (
 
 // go build -o cmd/gophermart/gophermart.exe cmd/gophermart/*.go
 // "host=localhost user=gophermart password=gophermart dbname=gophermart sslmode=disable"
-// ./cmd/gophermart/gophermart.exe -a :8081 -r :8091 -l debug -d "postgresql://gophermart:gophermart@localhost/gophermart?sslmode=disable"
+// ./cmd/gophermart/gophermart.exe -a localhost:8081 -r http://localhost:8091 -l debug -d "postgresql://gophermart:gophermart@localhost/gophermart?sslmode=disable"
 func main() {
 	if err := run(); err != nil {
 		panic(err)
