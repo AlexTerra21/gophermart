@@ -31,6 +31,7 @@ func (d *Storage) createSchema() error {
 	models := []interface{}{
 		(*User)(nil),
 		(*Order)(nil),
+		(*Withdrawal)(nil),
 	}
 
 	for _, model := range models {
@@ -144,17 +145,42 @@ func (d *Storage) UpdateAccrual(ctx context.Context, order *Order) error {
 	return tx.Commit()
 }
 
-func (d *Storage) GetBalance(ctx context.Context, userID int64) (*Withdrawal, error) {
+func (d *Storage) GetBalance(ctx context.Context, userID int64) (float32, error) {
 	var sumAccrual float32
 	err := d.db.ModelContext(ctx, (*Order)(nil)).ColumnExpr("sum(?)", pg.Ident("accrual")).Where("user_id = ?", userID).Select(&sumAccrual)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
+	return sumAccrual, nil
+}
 
-	withdrawal := Withdrawal{
-		Current: sumAccrual,
+func (d *Storage) GetWithdrawSum(ctx context.Context, userID int64) (float32, error) {
+	var sumWithdraw float32
+	err := d.db.ModelContext(ctx, (*Withdrawal)(nil)).ColumnExpr("sum(?)", pg.Ident("withdrawn")).Where("user_id = ?", userID).Select(&sumWithdraw)
+	if err != nil {
+		return -1, err
 	}
-	return &withdrawal, nil
+	return sumWithdraw, nil
+}
+
+func (d *Storage) SetWithdraw(ctx context.Context, withdraw Withdrawal) error {
+	tx, err := d.db.BeginContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Close()
+
+	_, err = tx.ModelContext(ctx, &withdraw).Insert()
+	if err != nil {
+		if pgErr, ok := err.(pg.Error); ok {
+			if pgErr.IntegrityViolation() {
+				return errs.ErrConflict
+			}
+		} else {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func generateSalt() ([]byte, error) {

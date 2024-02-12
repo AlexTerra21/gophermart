@@ -40,8 +40,13 @@ type Accrual struct {
 type Withdrawal struct {
 	ID          int64     `json:"-"`
 	UserID      int64     `json:"-"`
-	Order       string    `json:"-"`
-	Current     float32   `json:"current,omitempty"`
+	Order       string    `pg:",notnull,unique" json:"order,omitempty"`
 	Withdrawn   float32   `json:"withdrawn,omitempty"`
 	ProcessedAt time.Time `json:"-"`
+	Current     float32   `pg:"-" json:"current,omitempty"`
+}
+
+type WithdrawRequest struct {
+	Order string  `json:"order"`
+	Sum   float32 `json:"sum"`
 }

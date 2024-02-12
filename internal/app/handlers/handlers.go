@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
@@ -27,7 +28,7 @@ func MainRouter(c *config.Config) chi.Router {
 	r.Get("/api/user/orders", logger.WithLogging(getOrders(c)))
 	r.Get("/api/user/orders", compress.WithCompress(logger.WithLogging(getOrders(c))))
 	r.Get("/api/user/balance", compress.WithCompress(logger.WithLogging(balance(c))))
-	r.Post("/api/user/balance/withdraw", logger.WithLogging(empty(c)))
+	r.Post("/api/user/balance/withdraw", logger.WithLogging(withdraw(c)))
 	r.Get("/api/user/withdrawals", logger.WithLogging(empty(c)))
 	r.MethodNotAllowed(notAllowedHandler)
 	return r
@@ -184,20 +185,89 @@ func balance(c *config.Config) http.HandlerFunc {
 			return
 		}
 
-		withdraw, err := c.Storage.GetBalance(r.Context(), userID)
+		sumAccrual, err := c.Storage.GetBalance(r.Context(), userID)
 		if err != nil {
 			logger.Log().Debug("Error getting balance", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
 
+		sumWithdraw, err := c.Storage.GetWithdrawSum(r.Context(), userID)
+		if err != nil {
+			logger.Log().Debug("Error getting withdraw sum", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+
+		withdraw := storage.Withdrawal{
+			Current:   sumAccrual - sumWithdraw,
+			Withdrawn: sumWithdraw,
+		}
+
 		w.Header().Set("content-type", "application/json")
 		w.WriteHeader(http.StatusOK) // 200
 		encoder := json.NewEncoder(w)
-		if err := encoder.Encode(withdraw); err != nil {
+		if err := encoder.Encode(&withdraw); err != nil {
 			logger.Log().Debug("error encoding response", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
+	}
+}
+
+func withdraw(c *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := auth.CheckAuth(r)
+		if userID < 0 {
+			w.WriteHeader(http.StatusUnauthorized) // 401
+			return
+		}
+		withdrawRequest := storage.WithdrawRequest{}
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&withdrawRequest); err != nil {
+			logger.Log().Debug("cannot decode request JSON body", zap.Error(err))
+			http.Error(w, "Bad request", http.StatusBadRequest) // 400
+			return
+		}
+
+		number, err := strconv.ParseInt(string(withdrawRequest.Order), 10, 64)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest) // 400
+			return
+		}
+		if !utils.Valid(number) {
+			http.Error(w, "Invalid number", http.StatusUnprocessableEntity) // 422
+			return
+		}
+
+		sumAccrual, err := c.Storage.GetBalance(r.Context(), userID)
+		if err != nil {
+			logger.Log().Debug("Error getting balance", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+
+		if sumAccrual < withdrawRequest.Sum {
+			http.Error(w, "Payment Required", http.StatusPaymentRequired) // 402
+			return
+		}
+		withdraw := storage.Withdrawal{
+			UserID:      userID,
+			Order:       withdrawRequest.Order,
+			Withdrawn:   withdrawRequest.Sum,
+			ProcessedAt: time.Now(),
+		}
+		err = c.Storage.SetWithdraw(r.Context(), withdraw)
+		if err != nil {
+			logger.Log().Debug("Error add withdraw", zap.Error(err))
+			if errors.Is(err, errs.ErrConflict) {
+				http.Error(w, "Conflict", http.StatusConflict) //409
+				return
+			} else {
+				w.WriteHeader(http.StatusInternalServerError) // 500
+				return
+			}
+		}
+
 	}
 }
