@@ -26,6 +26,7 @@ func MainRouter(c *config.Config) chi.Router {
 	r.Post("/api/user/orders", logger.WithLogging(addOrder(c)))
 	r.Get("/api/user/orders", logger.WithLogging(getOrders(c)))
 	r.Get("/api/user/orders", compress.WithCompress(logger.WithLogging(getOrders(c))))
+	r.Get("/api/user/balance", logger.WithLogging(empty(c)))
 	r.Post("/api/user/balance/withdraw", logger.WithLogging(empty(c)))
 	r.Get("/api/user/withdrawals", logger.WithLogging(empty(c)))
 	r.MethodNotAllowed(notAllowedHandler)
@@ -156,7 +157,7 @@ func getOrders(c *config.Config) http.HandlerFunc {
 		}
 		orders, err := c.Storage.GetOrders(r.Context(), userID)
 		if err != nil {
-			logger.Log().Debug("Error geting orders", zap.Error(err))
+			logger.Log().Debug("Error getting orders", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}

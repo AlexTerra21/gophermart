@@ -24,15 +24,23 @@ type Order struct {
 	ID         int64     `json:"-"`
 	Number     string    `pg:",notnull,unique" json:"number"`
 	Status     Status    `pg:",notnull" json:"status"`
-	Accrual    float32   `json:"accrual"`
+	Accrual    float32   `json:"accrual,omitempty"`
 	UploadedAt time.Time `json:"uploaded_at"`
 	UserID     int64     `json:"-"`
 	// User       *User     `json:"-" pg:"rel:has-one"`
 }
 
 type Accrual struct {
-	Number  int64   `json:"-"`
+	// Number  int64   `json:"-"`
 	Order   string  `json:"order"`
 	Status  Status  `json:"status"`
 	Accrual float32 `json:"accrual"`
+}
+
+type Withdrawal struct {
+	ID          int64
+	UserId      int64
+	Order       string
+	Withdraw    float32
+	ProcessedAt time.Time
 }

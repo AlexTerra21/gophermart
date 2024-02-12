@@ -8,6 +8,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/AlexTerra21/gophermart/internal/app/auth"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
 )
 
@@ -31,7 +32,10 @@ func Test_addOrder(t *testing.T) {
 	conf := initTestConfig()
 	srv := httptest.NewServer(MainRouter(conf))
 	defer srv.Close()
+	conf.InitAsync()
 	conf.Storage.TestDataSetOrder()
+	token5, _ := auth.BuildJWTString(5)
+	token7, _ := auth.BuildJWTString(7)
 	tests := []struct {
 		name   string
 		method string
@@ -50,28 +54,35 @@ func Test_addOrder(t *testing.T) {
 			name:   "check 400",
 			method: http.MethodPost,
 			code:   http.StatusBadRequest,
-			cookie: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MDc2NjI2ODYsIlVzZXJJRCI6NX0.gvU226YM6iX7IvfzNP-OHTQ3GveZx9jSatCo_NvWR8c",
+			cookie: token5,
 			body:   "qwerty",
 		},
 		{
 			name:   "check 422",
 			method: http.MethodPost,
 			code:   http.StatusUnprocessableEntity,
-			cookie: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MDc2NjI2ODYsIlVzZXJJRCI6NX0.gvU226YM6iX7IvfzNP-OHTQ3GveZx9jSatCo_NvWR8c",
+			cookie: token5,
 			body:   "1234567890",
 		},
 		{
 			name:   "check 202",
 			method: http.MethodPost,
 			code:   http.StatusAccepted,
-			cookie: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MDc2NjI2ODYsIlVzZXJJRCI6NX0.gvU226YM6iX7IvfzNP-OHTQ3GveZx9jSatCo_NvWR8c",
+			cookie: token5,
 			body:   "12345678903",
 		},
 		{
 			name:   "check 200",
 			method: http.MethodPost,
 			code:   http.StatusOK,
-			cookie: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MDc2NjI2ODYsIlVzZXJJRCI6NX0.gvU226YM6iX7IvfzNP-OHTQ3GveZx9jSatCo_NvWR8c",
+			cookie: token5,
+			body:   "12345678903",
+		},
+		{
+			name:   "check 409",
+			method: http.MethodPost,
+			code:   http.StatusConflict,
+			cookie: token7,
 			body:   "12345678903",
 		},
 	}

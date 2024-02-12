@@ -52,7 +52,7 @@ func (a *Async) orderAccrual() {
 				}
 				order.Status = accrual.Status
 				order.Accrual = accrual.Accrual
-				a.storage.UpdateAccrual(context.Background(), order)
+				err = a.storage.UpdateAccrual(context.Background(), order)
 				if err != nil {
 					logger.Log().Debug("cannot update orders", zap.Error(err))
 					continue

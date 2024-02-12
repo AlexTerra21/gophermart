@@ -124,7 +124,7 @@ func (d *Storage) SetOrder(ctx context.Context, number int64, userID int64) (*Or
 
 func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]Order, error) {
 	orders := make([]Order, 0)
-	err := d.db.ModelContext(ctx, &orders).Where("user_id = ?", userID).Select()
+	err := d.db.ModelContext(ctx, &orders).Where("user_id = ?", userID).Order("uploaded_at ASC").Select()
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +154,5 @@ func generateSalt() ([]byte, error) {
 
 // Для тестирования
 func (d *Storage) TestDataSetOrder() {
-	order := new(Order)
-	d.db.Model(order).Delete()
+	d.db.Exec("TRUNCATE orders")
 }
