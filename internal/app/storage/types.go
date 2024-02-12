@@ -38,9 +38,10 @@ type Accrual struct {
 }
 
 type Withdrawal struct {
-	ID          int64
-	UserId      int64
-	Order       string
-	Withdraw    float32
-	ProcessedAt time.Time
+	ID          int64     `json:"-"`
+	UserID      int64     `json:"-"`
+	Order       string    `json:"-"`
+	Current     float32   `json:"current,omitempty"`
+	Withdrawn   float32   `json:"withdrawn,omitempty"`
+	ProcessedAt time.Time `json:"-"`
 }

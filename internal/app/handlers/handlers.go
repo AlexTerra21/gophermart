@@ -26,7 +26,7 @@ func MainRouter(c *config.Config) chi.Router {
 	r.Post("/api/user/orders", logger.WithLogging(addOrder(c)))
 	r.Get("/api/user/orders", logger.WithLogging(getOrders(c)))
 	r.Get("/api/user/orders", compress.WithCompress(logger.WithLogging(getOrders(c))))
-	r.Get("/api/user/balance", logger.WithLogging(empty(c)))
+	r.Get("/api/user/balance", compress.WithCompress(logger.WithLogging(balance(c))))
 	r.Post("/api/user/balance/withdraw", logger.WithLogging(empty(c)))
 	r.Get("/api/user/withdrawals", logger.WithLogging(empty(c)))
 	r.MethodNotAllowed(notAllowedHandler)
@@ -166,9 +166,35 @@ func getOrders(c *config.Config) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("content-type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusOK) //200
 		encoder := json.NewEncoder(w)
 		if err := encoder.Encode(orders); err != nil {
+			logger.Log().Debug("error encoding response", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+	}
+}
+
+func balance(c *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := auth.CheckAuth(r)
+		if userID < 0 {
+			w.WriteHeader(http.StatusUnauthorized) // 401
+			return
+		}
+
+		withdraw, err := c.Storage.GetBalance(r.Context(), userID)
+		if err != nil {
+			logger.Log().Debug("Error getting balance", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusOK) // 200
+		encoder := json.NewEncoder(w)
+		if err := encoder.Encode(withdraw); err != nil {
 			logger.Log().Debug("error encoding response", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return

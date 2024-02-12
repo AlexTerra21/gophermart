@@ -144,6 +144,19 @@ func (d *Storage) UpdateAccrual(ctx context.Context, order *Order) error {
 	return tx.Commit()
 }
 
+func (d *Storage) GetBalance(ctx context.Context, userID int64) (*Withdrawal, error) {
+	var sumAccrual float32
+	err := d.db.ModelContext(ctx, (*Order)(nil)).ColumnExpr("sum(?)", pg.Ident("accrual")).Where("user_id = ?", userID).Select(&sumAccrual)
+	if err != nil {
+		return nil, err
+	}
+
+	withdrawal := Withdrawal{
+		Current: sumAccrual,
+	}
+	return &withdrawal, nil
+}
+
 func generateSalt() ([]byte, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
