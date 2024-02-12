@@ -183,6 +183,15 @@ func (d *Storage) SetWithdraw(ctx context.Context, withdraw Withdrawal) error {
 	return tx.Commit()
 }
 
+func (d *Storage) GetWithdrawals(ctx context.Context, userID int64) ([]Withdrawal, error) {
+	withdrawals := make([]Withdrawal, 0)
+	err := d.db.ModelContext(ctx, &withdrawals).Where("user_id = ?", userID).Order("processed_at DESC").Select()
+	if err != nil {
+		return nil, err
+	}
+	return withdrawals, nil
+}
+
 func generateSalt() ([]byte, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {

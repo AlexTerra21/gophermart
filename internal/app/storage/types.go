@@ -42,11 +42,12 @@ type Withdrawal struct {
 	UserID      int64     `json:"-"`
 	Order       string    `pg:",notnull,unique" json:"order,omitempty"`
 	Withdrawn   float32   `json:"withdrawn,omitempty"`
-	ProcessedAt time.Time `json:"-"`
+	ProcessedAt time.Time `json:"processed_at"`
 	Current     float32   `pg:"-" json:"current,omitempty"`
 }
 
 type WithdrawRequest struct {
-	Order string  `json:"order"`
-	Sum   float32 `json:"sum"`
+	Order       string    `json:"order,omitempty"`
+	Sum         float32   `json:"sum,omitempty"`
+	ProcessedAt time.Time `json:"processed_at,omitempty"`
 }

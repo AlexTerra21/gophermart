@@ -25,22 +25,16 @@ func MainRouter(c *config.Config) chi.Router {
 	r.Post("/api/user/register", logger.WithLogging(register(c)))
 	r.Post("/api/user/login", logger.WithLogging(login(c)))
 	r.Post("/api/user/orders", logger.WithLogging(addOrder(c)))
-	r.Get("/api/user/orders", logger.WithLogging(getOrders(c)))
 	r.Get("/api/user/orders", compress.WithCompress(logger.WithLogging(getOrders(c))))
 	r.Get("/api/user/balance", compress.WithCompress(logger.WithLogging(balance(c))))
 	r.Post("/api/user/balance/withdraw", logger.WithLogging(withdraw(c)))
-	r.Get("/api/user/withdrawals", logger.WithLogging(empty(c)))
+	r.Get("/api/user/withdrawals", compress.WithCompress(logger.WithLogging(withdrawals(c))))
 	r.MethodNotAllowed(notAllowedHandler)
 	return r
 }
 
 func notAllowedHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Unsupported method", http.StatusMethodNotAllowed) // В ответе код 400
-}
-
-func empty(c *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-	}
 }
 
 func register(c *config.Config) http.HandlerFunc {
@@ -269,5 +263,43 @@ func withdraw(c *config.Config) http.HandlerFunc {
 			}
 		}
 
+	}
+}
+
+func withdrawals(c *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := auth.CheckAuth(r)
+		if userID < 0 {
+			w.WriteHeader(http.StatusUnauthorized) // 401
+			return
+		}
+		withdrawalsRaw, err := c.Storage.GetWithdrawals(r.Context(), userID)
+		if err != nil {
+			logger.Log().Debug("Error getting orders", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
+		if len(withdrawalsRaw) == 0 {
+			w.WriteHeader(http.StatusNoContent) // 204
+			return
+		}
+		withdrawals := make([]storage.WithdrawRequest, 0)
+		for _, wd := range withdrawalsRaw {
+			w := storage.WithdrawRequest{
+				Order:       wd.Order,
+				Sum:         wd.Withdrawn,
+				ProcessedAt: wd.ProcessedAt,
+			}
+			withdrawals = append(withdrawals, w)
+		}
+
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusOK) // 200
+		encoder := json.NewEncoder(w)
+		if err := encoder.Encode(&withdrawals); err != nil {
+			logger.Log().Debug("error encoding response", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // 500
+			return
+		}
 	}
 }
