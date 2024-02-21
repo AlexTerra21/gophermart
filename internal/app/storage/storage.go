@@ -11,10 +11,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/AlexTerra21/gophermart/internal/app/errs"
+	"github.com/AlexTerra21/gophermart/internal/app/models"
 )
 
 type Storage struct {
 	db *pg.DB
+}
+
+var _storage *Storage
+
+func Init(dbURI string) error {
+	_storage = &Storage{}
+	return _storage.New(dbURI)
+}
+
+func GetStorage() *Storage {
+	return _storage
+}
+
+func (d *Storage) GetDB() *pg.DB {
+	return d.db
 }
 
 func (d *Storage) New(dbURI string) error {
@@ -29,9 +45,9 @@ func (d *Storage) New(dbURI string) error {
 
 func (d *Storage) createSchema() error {
 	models := []interface{}{
-		(*User)(nil),
-		(*Order)(nil),
-		(*Withdrawal)(nil),
+		(*models.User)(nil),
+		(*models.Order)(nil),
+		(*models.Withdrawal)(nil),
 	}
 
 	for _, model := range models {
@@ -49,7 +65,7 @@ func (d *Storage) Close() {
 	d.db.Close()
 }
 
-func (d *Storage) AddUser(ctx context.Context, user *User) (int64, error) {
+func (d *Storage) AddUser(ctx context.Context, user *models.User) (int64, error) {
 	salt, err := generateSalt()
 	if err != nil {
 		return -1, err
@@ -73,7 +89,7 @@ func (d *Storage) AddUser(ctx context.Context, user *User) (int64, error) {
 }
 
 // Проверка на совпадение логина и пароля. Возвращает userID в случае совпадения и -1 в противном случае.
-func (d *Storage) CheckLoginPassword(ctx context.Context, user *User) (int64, error) {
+func (d *Storage) CheckLoginPassword(ctx context.Context, user *models.User) (int64, error) {
 	// Проверка, что логин присутствует в базе ...
 	err := d.db.ModelContext(ctx, user).Where("name = ?", user.Name).Select()
 	if err != nil {
@@ -91,17 +107,11 @@ func (d *Storage) CheckLoginPassword(ctx context.Context, user *User) (int64, er
 	return user.ID, nil
 }
 
-// func (d *Storage) GetUserByName(ctx context.Context, name string) (user *User, err error) {
-// 	user = &User{}
-// 	err = d.db.ModelContext(ctx, user).Where("name = ?", name).Select()
-// 	return
-// }
-
-func (d *Storage) SetOrder(ctx context.Context, number int64, userID int64) (*Order, error) {
-	order := &Order{
+func (d *Storage) SetOrder(ctx context.Context, number int64, userID int64) (*models.Order, error) {
+	order := &models.Order{
 		Number:     fmt.Sprintf("%d", number),
 		UserID:     userID,
-		Status:     NEW,
+		Status:     models.NEW,
 		Accrual:    0,
 		UploadedAt: time.Now(),
 	}
@@ -123,8 +133,8 @@ func (d *Storage) SetOrder(ctx context.Context, number int64, userID int64) (*Or
 	return order, tx.Commit()
 }
 
-func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]Order, error) {
-	orders := make([]Order, 0)
+func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]models.Order, error) {
+	orders := make([]models.Order, 0)
 	err := d.db.ModelContext(ctx, &orders).Where("user_id = ?", userID).Order("uploaded_at ASC").Select()
 	if err != nil {
 		return nil, err
@@ -132,7 +142,7 @@ func (d *Storage) GetOrders(ctx context.Context, userID int64) ([]Order, error) 
 	return orders, nil
 }
 
-func (d *Storage) UpdateAccrual(ctx context.Context, order *Order) error {
+func (d *Storage) UpdateAccrual(ctx context.Context, order *models.Order) error {
 	tx, err := d.db.BeginContext(ctx)
 	if err != nil {
 		return err
@@ -147,7 +157,7 @@ func (d *Storage) UpdateAccrual(ctx context.Context, order *Order) error {
 
 func (d *Storage) GetBalance(ctx context.Context, userID int64) (float32, error) {
 	var sumAccrual float32
-	err := d.db.ModelContext(ctx, (*Order)(nil)).ColumnExpr("sum(?)", pg.Ident("accrual")).Where("user_id = ?", userID).Select(&sumAccrual)
+	err := d.db.ModelContext(ctx, (*models.Order)(nil)).ColumnExpr("sum(?)", pg.Ident("accrual")).Where("user_id = ?", userID).Select(&sumAccrual)
 	if err != nil {
 		return -1, err
 	}
@@ -156,14 +166,14 @@ func (d *Storage) GetBalance(ctx context.Context, userID int64) (float32, error)
 
 func (d *Storage) GetWithdrawSum(ctx context.Context, userID int64) (float32, error) {
 	var sumWithdraw float32
-	err := d.db.ModelContext(ctx, (*Withdrawal)(nil)).ColumnExpr("sum(?)", pg.Ident("withdrawn")).Where("user_id = ?", userID).Select(&sumWithdraw)
+	err := d.db.ModelContext(ctx, (*models.Withdrawal)(nil)).ColumnExpr("sum(?)", pg.Ident("withdrawn")).Where("user_id = ?", userID).Select(&sumWithdraw)
 	if err != nil {
 		return -1, err
 	}
 	return sumWithdraw, nil
 }
 
-func (d *Storage) SetWithdraw(ctx context.Context, withdraw Withdrawal) error {
+func (d *Storage) SetWithdraw(ctx context.Context, withdraw models.Withdrawal) error {
 	tx, err := d.db.BeginContext(ctx)
 	if err != nil {
 		return err
@@ -183,8 +193,8 @@ func (d *Storage) SetWithdraw(ctx context.Context, withdraw Withdrawal) error {
 	return tx.Commit()
 }
 
-func (d *Storage) GetWithdrawals(ctx context.Context, userID int64) ([]Withdrawal, error) {
-	withdrawals := make([]Withdrawal, 0)
+func (d *Storage) GetWithdrawals(ctx context.Context, userID int64) ([]models.Withdrawal, error) {
+	withdrawals := make([]models.Withdrawal, 0)
 	err := d.db.ModelContext(ctx, &withdrawals).Where("user_id = ?", userID).Order("processed_at DESC").Select()
 	if err != nil {
 		return nil, err
@@ -198,9 +208,4 @@ func generateSalt() ([]byte, error) {
 		return nil, err
 	}
 	return salt, nil
-}
-
-// Для тестирования
-func (d *Storage) TestDataSetOrder() {
-	d.db.Exec("TRUNCATE orders")
 }

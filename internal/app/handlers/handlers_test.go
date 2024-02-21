@@ -8,8 +8,10 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/AlexTerra21/gophermart/internal/app/async"
 	"github.com/AlexTerra21/gophermart/internal/app/auth"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
+	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
 // ./cmd/gophermart/gophermart.exe -a localhost:8081 -r http://localhost:8091 -l debug -d "postgresql://gophermart:gophermart@localhost/gophermart?sslmode=disable"
@@ -20,20 +22,31 @@ func initTestConfig() *config.Config {
 	conf.SetLogLevel("debug")
 	conf.SetDBConnectionString("postgresql://gophermart:gophermart@localhost/gophermart_test?sslmode=disable")
 	conf.SetAccrualAddress("http://localhost:8092")
-	conf.InitStorage()
 	return conf
 }
 
-func SetTestData(conf *config.Config) {
-
+func SetTestData() error {
+	db := storage.GetStorage().GetDB()
+	_, err := db.Exec("TRUNCATE orders")
+	return err
 }
 
 func Test_addOrder(t *testing.T) {
 	conf := initTestConfig()
 	srv := httptest.NewServer(MainRouter(conf))
 	defer srv.Close()
-	conf.InitAsync()
-	conf.Storage.TestDataSetOrder()
+	if err := storage.Init(conf.GetDBConnectString()); err != nil {
+		t.Log(err)
+		return
+	}
+	defer storage.GetStorage().Close()
+	if err := SetTestData(); err != nil {
+		t.Log(err)
+		return
+	}
+	doneCh := make(chan struct{})
+	async.NewAsync(doneCh, storage.GetStorage(), conf.GetAccrualAddress())
+
 	token5, _ := auth.BuildJWTString(5)
 	token7, _ := auth.BuildJWTString(7)
 	tests := []struct {

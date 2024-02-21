@@ -6,11 +6,11 @@ import (
 	"github.com/go-resty/resty/v2"
 
 	"github.com/AlexTerra21/gophermart/internal/app/errs"
-	"github.com/AlexTerra21/gophermart/internal/app/storage"
+	"github.com/AlexTerra21/gophermart/internal/app/models"
 )
 
-func GetAccrual(order string, endpoint string) (*storage.Accrual, error) {
-	accrual := &storage.Accrual{}
+func GetAccrual(order string, endpoint string) (*models.Accrual, error) {
+	accrual := &models.Accrual{}
 	client := resty.New()
 
 	resp, err := client.R().

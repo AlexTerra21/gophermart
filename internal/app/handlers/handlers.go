@@ -6,16 +6,17 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi"
-	"go.uber.org/zap"
 
+	"github.com/AlexTerra21/gophermart/internal/app/async"
 	"github.com/AlexTerra21/gophermart/internal/app/auth"
 	"github.com/AlexTerra21/gophermart/internal/app/compress"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
 	"github.com/AlexTerra21/gophermart/internal/app/errs"
 	"github.com/AlexTerra21/gophermart/internal/app/logger"
+	logicsuite "github.com/AlexTerra21/gophermart/internal/app/logic-suite"
+	"github.com/AlexTerra21/gophermart/internal/app/models"
 	"github.com/AlexTerra21/gophermart/internal/app/storage"
 	"github.com/AlexTerra21/gophermart/internal/app/utils"
 )
@@ -39,16 +40,16 @@ func notAllowedHandler(w http.ResponseWriter, r *http.Request) {
 
 func register(c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var user storage.User
+		var user models.User
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&user); err != nil {
-			logger.Log().Debug("cannot decode request JSON body", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "cannot decode request JSON body", Val: err})
 			http.Error(w, "", http.StatusInternalServerError) // 500
 			return
 		}
-		userID, err := c.Storage.AddUser(r.Context(), &user)
+		userID, err := storage.GetStorage().AddUser(r.Context(), &user)
 		if err != nil {
-			logger.Log().Debug("Error adding new user", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error adding new user", Val: err})
 			if errors.Is(err, errs.ErrConflict) {
 				http.Error(w, "Login busy", http.StatusConflict) // 409
 				return
@@ -61,7 +62,7 @@ func register(c *config.Config) http.HandlerFunc {
 		}
 		token, err := auth.BuildJWTString(userID)
 		if err != nil {
-			logger.Log().Debug("Error generate token", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error generate token", Val: err})
 			http.Error(w, "Error generate token", http.StatusInternalServerError) // 500
 			return
 		}
@@ -72,16 +73,16 @@ func register(c *config.Config) http.HandlerFunc {
 
 func login(c *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var user storage.User
+		var user models.User
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&user); err != nil {
-			logger.Log().Debug("cannot decode request JSON body", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "cannot decode request JSON body", Val: err})
 			http.Error(w, "Bad request", http.StatusBadRequest) // 400
 			return
 		}
-		userID, err := c.Storage.CheckLoginPassword(r.Context(), &user)
+		userID, err := storage.GetStorage().CheckLoginPassword(r.Context(), &user)
 		if err != nil {
-			logger.Log().Debug("Database error", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "database error", Val: err})
 			http.Error(w, "Database error", http.StatusInternalServerError) // 500
 			return
 		}
@@ -94,7 +95,7 @@ func login(c *config.Config) http.HandlerFunc {
 		}
 		token, err := auth.BuildJWTString(userID)
 		if err != nil {
-			logger.Log().Debug("Error generate token", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error generate token", Val: err})
 			http.Error(w, "Error generate token", http.StatusInternalServerError) // 500
 			return
 		}
@@ -122,9 +123,9 @@ func addOrder(c *config.Config) http.HandlerFunc {
 			return
 		}
 
-		order, err := c.Storage.SetOrder(r.Context(), number, userID)
+		order, err := storage.GetStorage().SetOrder(r.Context(), number, userID)
 		if err != nil {
-			logger.Log().Debug("Error adding new order", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error adding new order", Val: err})
 			if errors.Is(err, errs.ErrConflict) {
 				if userID == order.UserID {
 					w.WriteHeader(http.StatusOK) // 200
@@ -138,7 +139,7 @@ func addOrder(c *config.Config) http.HandlerFunc {
 				return
 			}
 		}
-		c.OrderQueue.Push(order)
+		async.GetAsync().Push(order)
 		w.WriteHeader(http.StatusAccepted) // 202
 	}
 }
@@ -150,9 +151,9 @@ func getOrders(c *config.Config) http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized) // 401
 			return
 		}
-		orders, err := c.Storage.GetOrders(r.Context(), userID)
+		orders, err := storage.GetStorage().GetOrders(r.Context(), userID)
 		if err != nil {
-			logger.Log().Debug("Error getting orders", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error getting orders", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
@@ -164,7 +165,7 @@ func getOrders(c *config.Config) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK) //200
 		encoder := json.NewEncoder(w)
 		if err := encoder.Encode(orders); err != nil {
-			logger.Log().Debug("error encoding response", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error encoding response", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
@@ -179,30 +180,18 @@ func balance(c *config.Config) http.HandlerFunc {
 			return
 		}
 
-		sumAccrual, err := c.Storage.GetBalance(r.Context(), userID)
+		withdraw, err := logicsuite.CalculateWithdraw(r.Context(), userID)
 		if err != nil {
-			logger.Log().Debug("Error getting balance", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error calculate withdraw", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
-		}
-
-		sumWithdraw, err := c.Storage.GetWithdrawSum(r.Context(), userID)
-		if err != nil {
-			logger.Log().Debug("Error getting withdraw sum", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError) // 500
-			return
-		}
-
-		withdraw := storage.Withdrawal{
-			Current:   sumAccrual - sumWithdraw,
-			Withdrawn: sumWithdraw,
 		}
 
 		w.Header().Set("content-type", "application/json")
 		w.WriteHeader(http.StatusOK) // 200
 		encoder := json.NewEncoder(w)
 		if err := encoder.Encode(&withdraw); err != nil {
-			logger.Log().Debug("error encoding response", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error encoding response", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
@@ -216,10 +205,10 @@ func withdraw(c *config.Config) http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized) // 401
 			return
 		}
-		withdrawRequest := storage.WithdrawRequest{}
+		withdrawRequest := models.WithdrawRequest{}
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&withdrawRequest); err != nil {
-			logger.Log().Debug("cannot decode request JSON body", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "cannot decode request JSON body", Val: err})
 			http.Error(w, "Bad request", http.StatusBadRequest) // 400
 			return
 		}
@@ -234,26 +223,21 @@ func withdraw(c *config.Config) http.HandlerFunc {
 			return
 		}
 
-		sumAccrual, err := c.Storage.GetBalance(r.Context(), userID)
+		withdraw, err := logicsuite.RequestWithdrawal(r.Context(), userID, withdrawRequest)
 		if err != nil {
-			logger.Log().Debug("Error getting balance", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError) // 500
-			return
+			if errors.Is(err, errs.ErrPaymentRequired) {
+				http.Error(w, "Payment Required", http.StatusPaymentRequired) // 402
+				return
+			} else {
+				logger.Debug("Error", logger.Field{Key: "error getting balance", Val: err})
+				w.WriteHeader(http.StatusInternalServerError) // 500
+				return
+			}
 		}
 
-		if sumAccrual < withdrawRequest.Sum {
-			http.Error(w, "Payment Required", http.StatusPaymentRequired) // 402
-			return
-		}
-		withdraw := storage.Withdrawal{
-			UserID:      userID,
-			Order:       withdrawRequest.Order,
-			Withdrawn:   withdrawRequest.Sum,
-			ProcessedAt: time.Now(),
-		}
-		err = c.Storage.SetWithdraw(r.Context(), withdraw)
+		err = storage.GetStorage().SetWithdraw(r.Context(), *withdraw)
 		if err != nil {
-			logger.Log().Debug("Error add withdraw", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error add withdraw", Val: err})
 			if errors.Is(err, errs.ErrConflict) {
 				http.Error(w, "Conflict", http.StatusConflict) //409
 				return
@@ -273,9 +257,9 @@ func withdrawals(c *config.Config) http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized) // 401
 			return
 		}
-		withdrawalsRaw, err := c.Storage.GetWithdrawals(r.Context(), userID)
+		withdrawalsRaw, err := storage.GetStorage().GetWithdrawals(r.Context(), userID)
 		if err != nil {
-			logger.Log().Debug("Error getting orders", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error getting orders", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}
@@ -283,9 +267,9 @@ func withdrawals(c *config.Config) http.HandlerFunc {
 			w.WriteHeader(http.StatusNoContent) // 204
 			return
 		}
-		withdrawals := make([]storage.WithdrawRequest, 0)
+		withdrawals := make([]models.WithdrawRequest, 0)
 		for _, wd := range withdrawalsRaw {
-			w := storage.WithdrawRequest{
+			w := models.WithdrawRequest{
 				Order:       wd.Order,
 				Sum:         wd.Withdrawn,
 				ProcessedAt: wd.ProcessedAt,
@@ -297,7 +281,7 @@ func withdrawals(c *config.Config) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK) // 200
 		encoder := json.NewEncoder(w)
 		if err := encoder.Encode(&withdrawals); err != nil {
-			logger.Log().Debug("error encoding response", zap.Error(err))
+			logger.Debug("Error", logger.Field{Key: "error encoding response", Val: err})
 			w.WriteHeader(http.StatusInternalServerError) // 500
 			return
 		}

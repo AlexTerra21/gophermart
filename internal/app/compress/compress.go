@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/AlexTerra21/gophermart/internal/app/logger"
 )
 
@@ -104,7 +102,7 @@ func WithCompress(h http.Handler) http.HandlerFunc {
 		if sendsGzip {
 			cr, err := newCompressReader(r.Body)
 			if err != nil {
-				logger.Log().Error("Error read encoded body", zap.Error(err))
+				logger.Debug("Error", logger.Field{Key: "Error read encoded body", Val: err})
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -112,10 +110,10 @@ func WithCompress(h http.Handler) http.HandlerFunc {
 			defer cr.Close()
 		}
 
-		logger.Log().Debug("WithCompress",
-			zap.String("Content-Type", r.Header.Get("Content-Type")),
-			zap.String("Accept-Encoding", r.Header.Get("Accept-Encoding")),
-			zap.String("Content-Encoding", r.Header.Get("Content-Encoding")),
+		logger.Debug("WithCompress",
+			logger.Field{Key: "Content-Type", Val: r.Header.Get("Content-Type")},
+			logger.Field{Key: "Accept-Encoding", Val: r.Header.Get("Accept-Encoding")},
+			logger.Field{Key: "Content-Encoding", Val: r.Header.Get("Content-Encoding")},
 		)
 
 		h.ServeHTTP(ow, r)

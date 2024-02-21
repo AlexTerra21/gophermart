@@ -1,17 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"go.uber.org/zap"
-
+	"github.com/AlexTerra21/gophermart/internal/app/async"
 	"github.com/AlexTerra21/gophermart/internal/app/config"
 	"github.com/AlexTerra21/gophermart/internal/app/handlers"
 	"github.com/AlexTerra21/gophermart/internal/app/logger"
+	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
 // go build -o cmd/gophermart/gophermart.exe cmd/gophermart/*.go
@@ -30,25 +31,30 @@ func run() (err error) {
 	if err = logger.Initialize(config.GetLogLevel()); err != nil {
 		return err
 	}
-	if err = config.InitStorage(); err != nil {
+	if err = storage.Init(config.GetDBConnectString()); err != nil {
 		return err
 	}
-	defer config.Storage.Close()
+	defer storage.GetStorage().Close()
+	// сигнальный канал для завершения горутин
+	doneCh := make(chan struct{})
+	// закрываем его при завершении программы
+	defer close(doneCh)
 
-	config.InitAsync()
+	async.NewAsync(doneCh, storage.GetStorage(), config.GetAccrualAddress())
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		logger.Log().Info("Running server", zap.String("address", config.GetServerAddress()))
+		logger.Info("Running server", logger.Field{Key: "address", Val: config.GetServerAddress()})
 		err := http.ListenAndServe(config.GetServerAddress(), handlers.MainRouter(config))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}()
 	sig := <-signalCh
-	logger.Log().Sugar().Infof("Received signal: %v\n", sig)
+	doneCh <- struct{}{}
+	logger.Info(fmt.Sprintf("Received signal: %v\n", sig))
 
 	return nil
 }

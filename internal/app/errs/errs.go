@@ -6,3 +6,5 @@ import "errors"
 var ErrConflict = errors.New("data conflict")
 
 var ErrNoContent = errors.New("no content")
+
+var ErrPaymentRequired = errors.New("payment required")

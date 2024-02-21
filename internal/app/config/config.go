@@ -4,9 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-
-	"github.com/AlexTerra21/gophermart/internal/app/async"
-	"github.com/AlexTerra21/gophermart/internal/app/storage"
 )
 
 type Config struct {
@@ -14,25 +11,11 @@ type Config struct {
 	logLevel        string
 	dbConnectString string
 	accrualAddress  string
-	Storage         *storage.Storage
-	OrderQueue      *async.Async
 }
 
 func NewConfig() *Config {
-	conf := &Config{
-		Storage: &storage.Storage{},
-	}
+	conf := &Config{}
 	return conf
-}
-
-func (c *Config) InitStorage() (err error) {
-	// logger.Log().Info(c.dbConnectString)
-	err = c.Storage.New(c.dbConnectString)
-	return
-}
-
-func (c *Config) InitAsync() {
-	c.OrderQueue = async.NewAsync(c.Storage, c.accrualAddress)
 }
 
 func (c *Config) GetServerAddress() string {
@@ -41,6 +24,10 @@ func (c *Config) GetServerAddress() string {
 
 func (c *Config) GetAccrualAddress() string {
 	return c.accrualAddress
+}
+
+func (c *Config) GetDBConnectString() string {
+	return c.dbConnectString
 }
 
 func (c *Config) GetLogLevel() string {
