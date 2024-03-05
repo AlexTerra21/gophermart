@@ -438,16 +438,16 @@ func Test_addOrder_getOrders(t *testing.T) {
 	status := models.Status("PROCESSED")
 	accrual := float32(3.14)
 
-	accrual_mock := mocks.NewAccrual(t)
+	accrualMock := mocks.NewAccrual(t)
 	// GetAccrual(order string, endpoint string) (*models.Accrual, error)
-	accrual_mock.
+	accrualMock.
 		On("GetAccrual", mock.Anything, mock.Anything).
 		Return(&models.Accrual{
 			Order:   order,
 			Status:  status,
 			Accrual: accrual,
 		}, nil)
-	srv, err := InitTest(t, accrual_mock)
+	srv, err := InitTest(t, accrualMock)
 	if err != nil {
 		t.Log(err)
 		return
