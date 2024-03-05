@@ -40,7 +40,7 @@ func run() (err error) {
 	// закрываем его при завершении программы
 	defer close(doneCh)
 
-	async.NewAsync(doneCh, storage.GetStorage(), config.GetAccrualAddress())
+	async.NewAsync(doneCh, storage.GetStorage(), config.GetAccrualAddress(), nil)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)

@@ -15,16 +15,24 @@ type Async struct {
 	doneCh         chan struct{}
 	accrualAddress string
 	storage        *storage.Storage
+	accrual        accrual.Accrual
 }
 
 var _async *Async
 
-func NewAsync(doneCh chan struct{}, s *storage.Storage, accrualAddress string) {
+func NewAsync(doneCh chan struct{}, s *storage.Storage, accrualAddress string, apiInterface accrual.Accrual) {
+	var a accrual.Accrual
+	if apiInterface == nil {
+		a = &accrual.Acc{}
+	} else {
+		a = apiInterface
+	}
 	instance := &Async{
 		orderChan:      make(chan *models.Order, 1024),
 		doneCh:         doneCh,
 		accrualAddress: accrualAddress,
 		storage:        s,
+		accrual:        a,
 	}
 
 	go instance.orderAccrual()
@@ -56,7 +64,7 @@ func (a *Async) orderAccrual() {
 				if order.Status == models.PROCESSED || order.Status == models.INVALID {
 					continue
 				}
-				accrual, err := accrual.GetAccrual(order.Number, a.accrualAddress)
+				accrual, err := a.accrual.GetAccrual(order.Number, a.accrualAddress)
 				if err != nil {
 					logger.Debug("Error", logger.Field{Key: "get accrual error", Val: err})
 					continue
